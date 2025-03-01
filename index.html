@@ -68,6 +68,24 @@
     }
     .player1 { background-color: #ff5555; }
     .player2 { background-color: #50fa7b; }
+    /* Jump animation for movement */
+    @keyframes jump {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+      100% { transform: translateY(0); }
+    }
+    .move-animation {
+      animation: jump 0.3s ease-in-out;
+    }
+    /* Flash animation for a killed piece */
+    @keyframes flash {
+      0% { opacity: 1; }
+      50% { opacity: 0.2; }
+      100% { opacity: 1; }
+    }
+    .killed {
+      animation: flash 0.5s ease-in-out;
+    }
     #status { font-size: 20px; margin-top: 10px; color: #ff79c6; }
     .dice-container {
       display: flex;
@@ -175,10 +193,13 @@
     const maxWins = 3; // Game ends when a player wins 3 levels
 
     function updateBoard() {
+      // Clear all cells
       document.querySelectorAll(".cell").forEach(cell => cell.innerHTML = "");
+      // Place the pieces based on their positions.
       Object.entries(playerPositions).forEach(([player, pos]) => {
         const piece = document.createElement("div");
         piece.classList.add("piece", player);
+        // Append the piece into the proper cell.
         document.querySelector(`[data-index='${pos}']`).appendChild(piece);
       });
     }
@@ -205,11 +226,40 @@
     // Animates the movement cell-by-cell every 300ms.
     function animateMovement(player, startPos, targetPos) {
       let pos = startPos;
+      const other = player === 'player1' ? 'player2' : 'player1';
+      let killOccurred = false;
       levelActive = false; // disable input during movement
       const interval = setInterval(() => {
         pos++;
         playerPositions[player] = pos;
         updateBoard();
+
+        // Add a jump animation to the moved piece.
+        const pieceElem = document.querySelector(`[data-index='${pos}'] .piece.${player}`);
+        if (pieceElem) {
+          pieceElem.classList.add("move-animation");
+          setTimeout(() => pieceElem.classList.remove("move-animation"), 300);
+        }
+        
+        // Check if the moving player lands on the same cell as the opponent
+        // and if the moving player came from behind.
+        if (!killOccurred && pos === playerPositions[other] && startPos < playerPositions[other]) {
+          killOccurred = true;
+          const opponentPiece = document.querySelector(`[data-index='${playerPositions[other]}'] .piece.${other}`);
+          if (opponentPiece) {
+            opponentPiece.classList.add("killed");
+            setTimeout(() => {
+              opponentPiece.classList.remove("killed");
+              // Reset opponent's position to the start.
+              playerPositions[other] = 0;
+              updateBoard();
+            }, 500);
+          } else {
+            playerPositions[other] = 0;
+            updateBoard();
+          }
+        }
+        
         if (pos >= targetPos) {
           clearInterval(interval);
           // Check if the player reached the endpoint to win the level.
@@ -217,19 +267,18 @@
             wins[player]++;
             const winnerName = player === 'player1' ? "Player 1" : "Player 2";
             document.getElementById("status").innerText = `${winnerName} wins Level ${level}!`;
-            // Add winner animation to the winning piece.
             const winningPiece = document.querySelector(`[data-index='${endPoint}'] .piece`);
             if (winningPiece) {
               winningPiece.classList.add("winner");
             }
-            // Check if the player has won the game.
+            // Check for overall game win.
             if (wins[player] >= maxWins) {
               setTimeout(() => {
                 document.getElementById("status").innerText = `${winnerName} wins the game!`;
               }, 500);
               return;
             }
-            // Display the level-up banner before starting the next level.
+            // Show level-up banner then proceed to next level.
             const banner = document.getElementById("levelBanner");
             banner.innerText = `Level ${level} Complete!`;
             banner.style.display = "block";
@@ -239,7 +288,7 @@
               setTimeout(nextLevel, 1000);
             }, 2000);
           } else {
-            // If not reaching the endpoint, switch turns.
+            // If endpoint not reached, switch turns.
             currentPlayer = player === 'player1' ? 'player2' : 'player1';
             document.getElementById("status").innerText = `Level ${level}: ${currentPlayer === 'player1' ? "Player 1" : "Player 2"}'s Turn`;
             levelActive = true;
@@ -280,7 +329,7 @@
       updateBoard();
     }
 
-    // Proceeds to the next level by resetting positions and updating the board.
+    // Proceeds to the next level.
     function nextLevel() {
       level++;
       playerPositions = { player1: 0, player2: 0 };
