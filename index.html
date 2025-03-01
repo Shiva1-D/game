@@ -128,11 +128,30 @@
     .status-winner {
       animation: statusBounce 1.5s ease-in-out infinite;
     }
+    /* Level-up banner styling */
+    #levelBanner {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      color: #f1fa8c;
+      padding: 20px 40px;
+      font-size: 36px;
+      border: 2px solid #ff79c6;
+      border-radius: 10px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <h1 style="color: #f1fa8c;">Turn-Based Race Game</h1>
   <div id="status">Level 1: Player 1's Turn</div>
+  <!-- Level-up banner -->
+  <div id="levelBanner"></div>
   <div class="game-container">
     <div class="dice-container">
       <div id="diceAnimation1" class="dice-animation">🎲</div>
@@ -147,11 +166,13 @@
   <script>
     // Global game variables
     let level = 1;
-    let boardSize = 5; // Level 1 board is 5x5; will update with level progression.
+    let boardSize = 5; // Level 1 board is 5x5; increases with each level.
     let endPoint = boardSize * boardSize - 1;
     let playerPositions = { player1: 0, player2: 0 };
     let currentPlayer = 'player1';
-    let levelActive = true; // flag to disable input between levels
+    let levelActive = true; // flag to disable input during animations
+    let wins = { player1: 0, player2: 0 };
+    const maxWins = 3; // Game ends when a player wins 3 levels
 
     function updateBoard() {
       document.querySelectorAll(".cell").forEach(cell => cell.innerHTML = "");
@@ -166,6 +187,7 @@
       return Math.floor(Math.random() * 6) + 1;
     }
 
+    // Initiates a dice roll and triggers the movement animation.
     function handleDiceRoll(diceElement, player) {
       if (!levelActive) return;
       diceElement.innerText = "🎲";
@@ -174,40 +196,72 @@
         const move = rollDice();
         diceElement.innerText = move;
         diceElement.classList.remove("rolling");
-        playerPositions[player] = Math.min(playerPositions[player] + move, endPoint);
-
-        if (playerPositions[player] === endPoint) {
-          levelActive = false;
-          document.getElementById("status").innerText = `${player === 'player1' ? "Player 1" : "Player 2"} wins Level ${level}! Starting next level in 3 seconds...`;
-          // Add winner animation to the winning piece
-          const winningPiece = document.querySelector(`[data-index='${endPoint}'] .piece`);
-          if (winningPiece) {
-            winningPiece.classList.add("winner");
-          }
-          setTimeout(nextLevel, 3000);
-          return;
-        }
-
-        currentPlayer = player === 'player1' ? 'player2' : 'player1';
-        document.getElementById("status").innerText = `Level ${level}: ${currentPlayer === 'player1' ? "Player 1" : "Player 2"}'s Turn`;
-        updateBoard();
+        const startPos = playerPositions[player];
+        const targetPos = Math.min(startPos + move, endPoint);
+        animateMovement(player, startPos, targetPos);
       }, 1000);
     }
 
+    // Animates the movement cell-by-cell every 300ms.
+    function animateMovement(player, startPos, targetPos) {
+      let pos = startPos;
+      levelActive = false; // disable input during movement
+      const interval = setInterval(() => {
+        pos++;
+        playerPositions[player] = pos;
+        updateBoard();
+        if (pos >= targetPos) {
+          clearInterval(interval);
+          // Check if the player reached the endpoint to win the level.
+          if (pos === endPoint) {
+            wins[player]++;
+            const winnerName = player === 'player1' ? "Player 1" : "Player 2";
+            document.getElementById("status").innerText = `${winnerName} wins Level ${level}!`;
+            // Add winner animation to the winning piece.
+            const winningPiece = document.querySelector(`[data-index='${endPoint}'] .piece`);
+            if (winningPiece) {
+              winningPiece.classList.add("winner");
+            }
+            // Check if the player has won the game.
+            if (wins[player] >= maxWins) {
+              setTimeout(() => {
+                document.getElementById("status").innerText = `${winnerName} wins the game!`;
+              }, 500);
+              return;
+            }
+            // Display the level-up banner before starting the next level.
+            const banner = document.getElementById("levelBanner");
+            banner.innerText = `Level ${level} Complete!`;
+            banner.style.display = "block";
+            banner.style.opacity = 1;
+            setTimeout(() => {
+              banner.style.opacity = 0;
+              setTimeout(nextLevel, 1000);
+            }, 2000);
+          } else {
+            // If not reaching the endpoint, switch turns.
+            currentPlayer = player === 'player1' ? 'player2' : 'player1';
+            document.getElementById("status").innerText = `Level ${level}: ${currentPlayer === 'player1' ? "Player 1" : "Player 2"}'s Turn`;
+            levelActive = true;
+          }
+        }
+      }, 300);
+    }
+
+    // Button event listeners.
     document.getElementById("rollDice1").addEventListener("click", () => {
-      if (currentPlayer === 'player1') {
+      if (currentPlayer === 'player1' && levelActive) {
         handleDiceRoll(document.getElementById("diceAnimation1"), 'player1');
       }
     });
-
     document.getElementById("rollDice2").addEventListener("click", () => {
-      if (currentPlayer === 'player2') {
+      if (currentPlayer === 'player2' && levelActive) {
         handleDiceRoll(document.getElementById("diceAnimation2"), 'player2');
       }
     });
 
     function createBoard() {
-      // Update board dimensions based on level (increasing board size by 1 each level)
+      // Update board dimensions based on the current level.
       boardSize = 5 + (level - 1);
       endPoint = boardSize * boardSize - 1;
       const board = document.getElementById("board");
@@ -226,6 +280,7 @@
       updateBoard();
     }
 
+    // Proceeds to the next level by resetting positions and updating the board.
     function nextLevel() {
       level++;
       playerPositions = { player1: 0, player2: 0 };
